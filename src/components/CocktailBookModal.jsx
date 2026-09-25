@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, ChevronLeft, ChevronRight, BookOpen, Lightbulb, Sparkles, Bookmark, Download, Loader2 } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, BookOpen, Lightbulb, Sparkles, Bookmark, Download, Loader2, HandMetal } from 'lucide-react';
 import { ALCOHOL_CATEGORIES } from '../data/initialCocktails';
 import { generateCocktailBookPdf } from '../utils/pdfGenerator';
 
@@ -10,6 +10,12 @@ export default function CocktailBookModal({ isOpen, onClose, cocktails }) {
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [pdfProgressText, setPdfProgressText] = useState('');
   const containerRef = useRef(null);
+
+  // Touch Swipe Gesture Refs
+  const touchStartX = useRef(0);
+  const touchStartY = useRef(0);
+  const touchEndX = useRef(0);
+  const touchEndY = useRef(0);
 
   // Total items: Cover (index 0) + all cocktails
   const totalPages = cocktails.length + 1;
@@ -53,6 +59,42 @@ export default function CocktailBookModal({ isOpen, onClose, cocktails }) {
     }, 450);
   };
 
+  // Mobile Touch Swipe Handlers (Parmak hareketleriyle sağa sola sayfa çevirme)
+  const handleTouchStart = (e) => {
+    if (isFlipping || isGeneratingPdf) return;
+    touchStartX.current = e.touches[0].clientX;
+    touchStartY.current = e.touches[0].clientY;
+    touchEndX.current = e.touches[0].clientX;
+    touchEndY.current = e.touches[0].clientY;
+  };
+
+  const handleTouchMove = (e) => {
+    touchEndX.current = e.touches[0].clientX;
+    touchEndY.current = e.touches[0].clientY;
+  };
+
+  const handleTouchEnd = () => {
+    const diffX = touchStartX.current - touchEndX.current;
+    const diffY = touchStartY.current - touchEndY.current;
+
+    // Yatay kaydırma dikey kaydırmadan belirgin olmalı ve en az 35px olmalı
+    if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 35) {
+      if (diffX > 0) {
+        // Parmağı sola kaydırdı -> İLERİ (Sonraki sayfa)
+        handleNext();
+      } else {
+        // Parmağı sağa kaydırdı -> GERİ (Önceki sayfa)
+        handlePrev();
+      }
+    }
+
+    // Sıfırla
+    touchStartX.current = 0;
+    touchStartY.current = 0;
+    touchEndX.current = 0;
+    touchEndY.current = 0;
+  };
+
   const handleDownloadPdf = async () => {
     if (isGeneratingPdf) return;
     try {
@@ -78,16 +120,21 @@ export default function CocktailBookModal({ isOpen, onClose, cocktails }) {
     <div className="fixed inset-0 z-50 overflow-y-auto bg-black/85 backdrop-blur-md flex items-center justify-center p-2 sm:p-6 animate-in fade-in duration-300">
       
       {/* Top Floating Controls Bar */}
-      <div className="fixed top-4 left-4 right-4 z-60 flex items-center justify-between max-w-4xl mx-auto px-4 py-2.5 rounded-2xl bg-black/75 backdrop-blur-lg border border-white/20 text-white shadow-2xl">
+      <div className="fixed top-4 left-4 right-4 z-60 flex items-center justify-between max-w-4xl mx-auto px-3.5 sm:px-4 py-2.5 rounded-2xl bg-black/75 backdrop-blur-lg border border-white/20 text-white shadow-2xl">
         <div className="flex items-center space-x-2">
           <BookOpen className="w-5 h-5 text-amber-400" />
-          <span className="font-black text-sm tracking-wide uppercase">Coctail Tarif Kitabı</span>
-          <span className="text-xs bg-amber-400/20 text-amber-300 px-2 py-0.5 rounded-full font-bold">
-            {currentPage === 0 ? 'Kapak' : `Sayfa ${currentPage} / ${cocktails.length}`}
+          <span className="font-black text-xs sm:text-sm tracking-wide uppercase">Coctail Kitap</span>
+          <span className="text-[11px] sm:text-xs bg-amber-400/20 text-amber-300 px-2 py-0.5 rounded-full font-bold">
+            {currentPage === 0 ? 'Kapak' : `${currentPage} / ${cocktails.length}`}
           </span>
         </div>
 
         <div className="flex items-center space-x-2 sm:space-x-3">
+          {/* Mobile Swipe Hint Badge */}
+          <span className="text-[11px] text-amber-300/90 font-medium sm:hidden flex items-center">
+            👈 Kaydırın 👉
+          </span>
+
           {/* Download PDF Button */}
           <button
             onClick={handleDownloadPdf}
@@ -97,19 +144,19 @@ export default function CocktailBookModal({ isOpen, onClose, cocktails }) {
           >
             {isGeneratingPdf ? (
               <>
-                <Loader2 className="w-4 h-4 animate-spin text-stone-950" />
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-stone-950" />
                 <span className="hidden sm:inline">İndiriliyor...</span>
               </>
             ) : (
               <>
-                <Download className="w-4 h-4 stroke-[2.5]" />
-                <span>PDF İndir</span>
+                <Download className="w-3.5 h-3.5 stroke-[2.5]" />
+                <span>PDF</span>
               </>
             )}
           </button>
 
           <span className="text-xs text-stone-400 hidden md:inline">
-            (Ok tuşlarıyla çevirin)
+            (Ok tuşları veya kaydırma ile çevirin)
           </span>
 
           <button
@@ -137,10 +184,13 @@ export default function CocktailBookModal({ isOpen, onClose, cocktails }) {
         </div>
       )}
 
-      {/* Main Book Display Container */}
+      {/* Main Book Display Container with Touch Events */}
       <div
         ref={containerRef}
-        className="relative w-full max-w-2xl sm:max-w-3xl mt-14 mb-8"
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        className="relative w-full max-w-2xl sm:max-w-3xl mt-14 mb-8 select-none touch-pan-y"
         style={{ perspective: '1600px' }}
       >
         {/* Book Spine 3D Effect Shadow */}
@@ -194,8 +244,14 @@ export default function CocktailBookModal({ isOpen, onClose, cocktails }) {
                 <div className="w-24 h-1 bg-amber-400 mx-auto rounded-full" />
 
                 <p className="text-white/90 text-base sm:text-lg font-light leading-relaxed">
-                  Dünyanın en seçkin 7 alkol çeşidine adanmış, ölçüleri, hazırlanışı ve barmen püf noktalarıyla eksiksiz bir miksoloji el kitabı.
+                  Dünyanın en seçkin kokteyllerine adanmış, tam ölçüleri, hazırlanışı ve barmen püf noktalarıyla eksiksiz bir miksoloji el kitabı.
                 </p>
+
+                {/* Mobile touch gesture badge */}
+                <div className="sm:hidden inline-flex items-center space-x-2 bg-black/30 backdrop-blur-sm px-3.5 py-1.5 rounded-full border border-amber-400/40 text-amber-300 text-xs font-semibold">
+                  <span>👆</span>
+                  <span>Sayfaları parmağınızla sola/sağa kaydırarak çevirin</span>
+                </div>
 
                 <div className="grid grid-cols-4 gap-2 pt-2">
                   {['🍸 Votka', '🍋 Cin', '🥃 Viski', '🍹 Rom', '🌵 Tekila', '🍊 Likör', '🍇 Konyak'].slice(0, 4).map((badge, idx) => (
@@ -326,11 +382,11 @@ export default function CocktailBookModal({ isOpen, onClose, cocktails }) {
               }`}
             >
               <ChevronLeft className="w-4 h-4 stroke-[3]" />
-              <span>Önceki Sayfa</span>
+              <span>Önceki</span>
             </button>
 
             {/* Quick Page Jump Pills */}
-            <div className="flex items-center space-x-1.5 overflow-x-auto no-scrollbar max-w-[140px] sm:max-w-xs px-2">
+            <div className="flex items-center space-x-1.5 overflow-x-auto no-scrollbar max-w-[120px] sm:max-w-xs px-2">
               <button
                 onClick={() => setCurrentPage(0)}
                 className={`w-2.5 h-2.5 rounded-full transition-all ${
@@ -359,7 +415,7 @@ export default function CocktailBookModal({ isOpen, onClose, cocktails }) {
                   : 'bg-amber-400 hover:bg-amber-300 text-stone-950 font-black active:scale-95'
               }`}
             >
-              <span>Sonraki Sayfa</span>
+              <span>Sonraki</span>
               <ChevronRight className="w-4 h-4 stroke-[3]" />
             </button>
           </div>
