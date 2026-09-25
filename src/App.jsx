@@ -375,25 +375,13 @@ export default function App() {
       </main>
 
       {/* Footer */}
-      <footer className="mt-12 bg-black/30 backdrop-blur-md border-t border-white/20 text-white/80 py-8 px-4">
-        <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-xs">
-          <div className="flex items-center space-x-2">
-            <span className="font-black text-white text-base tracking-wider uppercase">coctail</span>
-            <span>•</span>
-            <span>Tüm kokteyl tarifleri ve kategorileri local cihazınızda güvenle saklanır.</span>
-          </div>
-
-          <div className="flex items-center space-x-4">
-            <button
-              onClick={handleResetDefaults}
-              className="text-white/60 hover:text-white flex items-center space-x-1 underline decoration-dotted"
-              title="Varsayılan tariflere ve kategorilere dön"
-            >
-              <RefreshCw className="w-3 h-3 mr-1" />
-              <span>Varsayılana Sıfırla</span>
-            </button>
-            <span>Vercel Ready 🚀</span>
-          </div>
+      <footer className="mt-12 bg-black/30 backdrop-blur-md border-t border-white/20 text-white/85 py-6 px-4">
+        <div className="max-w-7xl mx-auto flex items-center justify-center text-center">
+          <p className="text-sm sm:text-base font-medium tracking-wide">
+            <span className="font-black text-white uppercase mr-2 tracking-wider">coctail</span>
+            <span className="text-white/40 mr-2">•</span>
+            <span className="italic text-amber-200">Kokteyl: Birkaç malzeme, sonsuz hikâye.</span>
+          </p>
         </div>
       </footer>
 
