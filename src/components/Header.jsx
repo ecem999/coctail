@@ -78,9 +78,6 @@ export default function Header({ onOpenBook, onOpenAddModal, searchTerm, setSear
             >
               <BookOpen className="w-4 h-4 text-amber-400 group-hover:scale-110 transition-transform" />
               <span>Tarif Kitabı Görüntüle</span>
-              <span className="bg-amber-400/20 text-amber-300 text-[10px] px-1.5 py-0.5 rounded uppercase tracking-wider font-semibold">
-                3D Flip
-              </span>
             </button>
 
             <button
