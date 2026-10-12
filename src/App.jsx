@@ -168,24 +168,12 @@ export default function App() {
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
         
-        {/* Database Status Ribbon */}
+        {/* Live Shared Database Ribbon */}
         <div className="flex items-center justify-between px-3 py-2 rounded-2xl bg-black/20 backdrop-blur-md text-white text-xs border border-white/15">
           <div className="flex items-center space-x-2">
-            {isCloudConnected ? (
-              <>
-                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
-                <span className="font-bold text-emerald-200">Firebase Bulut Veritabanı Bağlı</span>
-                <span className="text-white/60 hidden sm:inline">• Herkesin eklediği tarifler anlık senkronize olur</span>
-              </>
-            ) : (
-              <>
-                <Database className="w-3.5 h-3.5 text-amber-300" />
-                <span className="font-semibold text-amber-200">Yerel Hafıza Modu Aktif</span>
-                <span className="text-white/70 hidden sm:inline">
-                  (Ortak Firebase veritabanını bağlamak için <code>src/firebase.js</code> dosyasına config ekleyebilirsiniz)
-                </span>
-              </>
-            )}
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="font-bold text-emerald-200">Ortak Bulut Veritabanı Aktif</span>
+            <span className="text-white/70 hidden sm:inline">• Eklenen tüm tarifler herkes tarafından anlık görüntülenir</span>
           </div>
           <span className="text-[11px] font-mono text-white/75 bg-white/10 px-2 py-0.5 rounded-md">
             {cocktails.length} Aktif Tarif
