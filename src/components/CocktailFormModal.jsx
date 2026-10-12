@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Plus, Trash2, Sparkles, Upload, Image as ImageIcon, Check, Lightbulb } from 'lucide-react';
+import { X, Plus, Trash2, Sparkles, Upload, Image as ImageIcon, Check, Lightbulb, Loader2 } from 'lucide-react';
 import { SUGGESTED_INGREDIENTS } from '../data/initialCocktails';
+import { compressImage } from '../utils/imageCompressor';
 
 const PRESET_IMAGES = [
   'https://images.unsplash.com/photo-1551024709-8f23befc6f87?auto=format&fit=crop&w=1200&q=80',
@@ -28,6 +29,7 @@ export default function CocktailFormModal({
   const [alcoholType, setAlcoholType] = useState(categories?.find(c => c.id === defaultCategory)?.name || categories?.[0]?.name || 'Votka');
   const [image, setImage] = useState(PRESET_IMAGES[0]);
   const [galleryImages, setGalleryImages] = useState([]);
+  const [isCompressing, setIsCompressing] = useState(false);
   const [ingredients, setIngredients] = useState([
     { name: 'Votka', amount: '50 ml' },
     { name: 'Lime suyu', amount: '20 ml' },
@@ -108,7 +110,7 @@ export default function CocktailFormModal({
   };
 
   // Handle Main Image file upload from device
-  const handleMainFileUpload = (e) => {
+  const handleMainFileUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -117,30 +119,37 @@ export default function CocktailFormModal({
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      if (event.target?.result) {
-        setImage(event.target.result);
-      }
-    };
-    reader.readAsDataURL(file);
+    try {
+      setIsCompressing(true);
+      // Auto compress to max 1000px and 75% quality (~80-120KB)
+      const compressedBase64 = await compressImage(file, 1000, 1000, 0.75);
+      setImage(compressedBase64);
+    } catch (err) {
+      console.error('Görsel sıkıştırma hatası:', err);
+      alert('Görsel işlenirken bir sorun oluştu.');
+    } finally {
+      setIsCompressing(false);
+    }
   };
 
   // Handle Gallery Images upload from device
-  const handleGalleryFilesUpload = (e) => {
+  const handleGalleryFilesUpload = async (e) => {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
 
-    files.forEach((file) => {
-      if (!file.type.startsWith('image/')) return;
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        if (event.target?.result) {
-          setGalleryImages((prev) => [...prev, event.target.result]);
-        }
-      };
-      reader.readAsDataURL(file);
-    });
+    try {
+      setIsCompressing(true);
+      for (const file of files) {
+        if (!file.type.startsWith('image/')) continue;
+        // Mini images compressed to max 600px (~30-50KB)
+        const compressed = await compressImage(file, 600, 600, 0.70);
+        setGalleryImages((prev) => [...prev, compressed]);
+      }
+    } catch (err) {
+      console.error('Galeri görsel sıkıştırma hatası:', err);
+    } finally {
+      setIsCompressing(false);
+    }
   };
 
   const handleRemoveGalleryImage = (indexToRemove) => {
@@ -400,11 +409,21 @@ export default function CocktailFormModal({
 
                   <button
                     type="button"
+                    disabled={isCompressing}
                     onClick={() => mainFileInputRef.current?.click()}
-                    className="w-full px-4 py-3 rounded-xl bg-[#FF5500] hover:bg-[#E64D00] text-white font-bold text-xs sm:text-sm flex items-center justify-center space-x-2 shadow-sm transition-all active:scale-98"
+                    className="w-full px-4 py-3 rounded-xl bg-[#FF5500] hover:bg-[#E64D00] text-white font-bold text-xs sm:text-sm flex items-center justify-center space-x-2 shadow-sm transition-all active:scale-98 disabled:opacity-60"
                   >
-                    <Upload className="w-4 h-4" />
-                    <span>📸 Cihazımdan Fotoğraf Yükle (Galeri / Dosya)</span>
+                    {isCompressing ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Görsel Optimize Ediliyor...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="w-4 h-4" />
+                        <span>📸 Cihazımdan Fotoğraf Yükle (Galeri / Dosya)</span>
+                      </>
+                    )}
                   </button>
 
                   {/* Or Image URL Input */}
@@ -413,7 +432,7 @@ export default function CocktailFormModal({
                       type="url"
                       value={image.startsWith('data:') ? '' : image}
                       onChange={(e) => setImage(e.target.value)}
-                      placeholder={image.startsWith('data:') ? '✓ Cihazınızdan görsel seçildi' : 'Veya görsel web URL\'si yapıştırın...'}
+                      placeholder={image.startsWith('data:') ? '✓ Cihazınızdan görsel seçildi ve optimize edildi' : 'Veya görsel web URL\'si yapıştırın...'}
                       className="w-full px-3.5 py-2 rounded-xl border border-stone-300 text-xs focus:outline-none focus:border-[#FF5500]"
                     />
                   </div>
@@ -463,11 +482,21 @@ export default function CocktailFormModal({
 
               <button
                 type="button"
+                disabled={isCompressing}
                 onClick={() => galleryFileInputRef.current?.click()}
-                className="w-full px-4 py-2.5 rounded-xl bg-white hover:bg-stone-100 text-stone-800 border border-stone-300 font-semibold text-xs flex items-center justify-center space-x-2 shadow-xs transition-colors mb-3"
+                className="w-full px-4 py-2.5 rounded-xl bg-white hover:bg-stone-100 text-stone-800 border border-stone-300 font-semibold text-xs flex items-center justify-center space-x-2 shadow-xs transition-colors mb-3 disabled:opacity-60"
               >
-                <Plus className="w-4 h-4 text-[#FF5500]" />
-                <span>Cihazdan Mini Görsel Ekle (Çoklu Seçilebilir)</span>
+                {isCompressing ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin text-[#FF5500]" />
+                    <span>Görseller Sıkıştırılıyor...</span>
+                  </>
+                ) : (
+                  <>
+                    <Plus className="w-4 h-4 text-[#FF5500]" />
+                    <span>Cihazdan Mini Görsel Ekle (Çoklu Seçilebilir)</span>
+                  </>
+                )}
               </button>
 
               {/* Gallery Thumbnails */}
