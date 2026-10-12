@@ -7,45 +7,23 @@ import CocktailFormModal from './components/CocktailFormModal';
 import CocktailBookModal from './components/CocktailBookModal';
 import AddCategoryModal from './components/AddCategoryModal';
 import Toast from './components/Toast';
-import { INITIAL_COCKTAILS, ALCOHOL_CATEGORIES } from './data/initialCocktails';
-import { BookOpen, Plus, Sparkles, RefreshCw } from 'lucide-react';
+import { ALCOHOL_CATEGORIES, INITIAL_COCKTAILS } from './data/initialCocktails';
+import {
+  subscribeCocktails,
+  saveCocktail,
+  deleteCocktail,
+  subscribeCategories,
+  saveCategory,
+  deleteCategory
+} from './services/cocktailService';
+import { isFirebaseConfigured } from './firebase';
+import { BookOpen, Plus, Sparkles, Cloud, Database } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
-const STORAGE_KEY = 'coctail_recipes_v2';
-const CATEGORIES_STORAGE_KEY = 'coctail_categories_v1';
-
 export default function App() {
-  // Dynamic categories state with localStorage fallback
-  const [categories, setCategories] = useState(() => {
-    try {
-      const saved = localStorage.getItem(CATEGORIES_STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
-        }
-      }
-    } catch (e) {
-      console.error('LocalStorage categories error', e);
-    }
-    return ALCOHOL_CATEGORIES;
-  });
-
-  // Load recipes from localStorage or fallback to initial
-  const [cocktails, setCocktails] = useState(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
-        }
-      }
-    } catch (e) {
-      console.error('LocalStorage load error', e);
-    }
-    return INITIAL_COCKTAILS;
-  });
+  const [categories, setCategories] = useState(ALCOHOL_CATEGORIES);
+  const [cocktails, setCocktails] = useState(INITIAL_COCKTAILS);
+  const [isCloudConnected, setIsCloudConnected] = useState(false);
 
   const [activeCategory, setActiveCategory] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
@@ -56,23 +34,22 @@ export default function App() {
   const [cocktailToEdit, setCocktailToEdit] = useState(null);
   const [toast, setToast] = useState(null);
 
-  // Sync recipes with localStorage
+  // Subscribe to real-time database
   useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(cocktails));
-    } catch (e) {
-      console.error('LocalStorage save error', e);
-    }
-  }, [cocktails]);
+    const unsubCocktails = subscribeCocktails((data, isCloud) => {
+      setCocktails(data);
+      setIsCloudConnected(isCloud);
+    });
 
-  // Sync categories with localStorage
-  useEffect(() => {
-    try {
-      localStorage.setItem(CATEGORIES_STORAGE_KEY, JSON.stringify(categories));
-    } catch (e) {
-      console.error('LocalStorage categories save error', e);
-    }
-  }, [categories]);
+    const unsubCategories = subscribeCategories((cats) => {
+      setCategories(cats);
+    });
+
+    return () => {
+      if (typeof unsubCocktails === 'function') unsubCocktails();
+      if (typeof unsubCategories === 'function') unsubCategories();
+    };
+  }, []);
 
   const showToast = (message, type = 'success') => {
     setToast({ message, type });
@@ -114,58 +91,62 @@ export default function App() {
   }, [cocktails, activeCategory, searchTerm]);
 
   // Add Custom Category
-  const handleAddCategory = (newCat) => {
-    setCategories([...categories, newCat]);
-    setActiveCategory(newCat.id);
-    showToast(`"${newCat.name}" alkol kategorisi başarıyla eklendi!`);
+  const handleAddCategory = async (newCat) => {
     try {
-      confetti({ particleCount: 50, spread: 60, origin: { y: 0.7 } });
-    } catch (e) {}
+      await saveCategory(newCat);
+      setActiveCategory(newCat.id);
+      showToast(`"${newCat.name}" alkol kategorisi eklendi!`);
+      try {
+        confetti({ particleCount: 50, spread: 60, origin: { y: 0.7 } });
+      } catch (e) {}
+    } catch (err) {
+      showToast('Kategori kaydedilirken hata oluştu.', 'error');
+    }
   };
 
   // Delete Custom Category
-  const handleDeleteCategory = (catId) => {
-    setCategories(categories.filter(c => c.id !== catId));
-    if (activeCategory === catId) {
-      setActiveCategory('all');
+  const handleDeleteCategory = async (catId) => {
+    try {
+      await deleteCategory(catId);
+      if (activeCategory === catId) {
+        setActiveCategory('all');
+      }
+      showToast('Alkol kategorisi silindi.', 'error');
+    } catch (err) {
+      showToast('Silinirken hata oluştu.', 'error');
     }
-    showToast('Alkol kategorisi silindi.', 'error');
   };
 
   // Save (Create or Update) Cocktail
-  const handleSaveCocktail = (cocktailData) => {
-    const existingIndex = cocktails.findIndex(c => c.id === cocktailData.id);
-    if (existingIndex >= 0) {
-      const updated = [...cocktails];
-      updated[existingIndex] = cocktailData;
-      setCocktails(updated);
-      showToast(`"${cocktailData.name}" başarıyla güncellendi!`);
-      if (selectedCocktail && selectedCocktail.id === cocktailData.id) {
-        setSelectedCocktail(cocktailData);
+  const handleSaveCocktail = async (cocktailData) => {
+    try {
+      const isEdit = !!cocktailToEdit;
+      await saveCocktail(cocktailData);
+
+      if (isEdit) {
+        showToast(`"${cocktailData.name}" başarıyla güncellendi!`);
+        if (selectedCocktail && selectedCocktail.id === cocktailData.id) {
+          setSelectedCocktail(cocktailData);
+        }
+      } else {
+        showToast(`"${cocktailData.name}" ortak veritabanına eklendi!`);
+        try {
+          confetti({ particleCount: 80, spread: 70, origin: { y: 0.6 } });
+        } catch (err) {}
       }
-    } else {
-      setCocktails([cocktailData, ...cocktails]);
-      showToast(`Yeni tarif "${cocktailData.name}" başarıyla eklendi!`);
-      try {
-        confetti({ particleCount: 80, spread: 70, origin: { y: 0.6 } });
-      } catch (err) {}
+    } catch (err) {
+      showToast('Tarif kaydedilirken hata oluştu.', 'error');
     }
   };
 
   // Delete Cocktail
-  const handleDeleteCocktail = (id) => {
-    const target = cocktails.find(c => c.id === id);
-    setCocktails(cocktails.filter(c => c.id !== id));
-    showToast(`"${target?.name || 'Tarif'}" silindi.`, 'error');
-  };
-
-  // Reset to default initial recipes & categories
-  const handleResetDefaults = () => {
-    if (window.confirm('Tüm tarifleri ve kategorileri varsayılan ayarlara sıfırlamak istiyor musunuz?')) {
-      setCocktails(INITIAL_COCKTAILS);
-      setCategories(ALCOHOL_CATEGORIES);
-      setActiveCategory('all');
-      showToast('Varsayılan ayarlara dönüldü.');
+  const handleDeleteCocktail = async (id) => {
+    try {
+      const target = cocktails.find(c => c.id === id);
+      await deleteCocktail(id);
+      showToast(`"${target?.name || 'Tarif'}" silindi.`, 'error');
+    } catch (err) {
+      showToast('Silinirken hata oluştu.', 'error');
     }
   };
 
@@ -187,9 +168,32 @@ export default function App() {
       {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
         
+        {/* Database Status Ribbon */}
+        <div className="flex items-center justify-between px-3 py-2 rounded-2xl bg-black/20 backdrop-blur-md text-white text-xs border border-white/15">
+          <div className="flex items-center space-x-2">
+            {isCloudConnected ? (
+              <>
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="font-bold text-emerald-200">Firebase Bulut Veritabanı Bağlı</span>
+                <span className="text-white/60 hidden sm:inline">• Herkesin eklediği tarifler anlık senkronize olur</span>
+              </>
+            ) : (
+              <>
+                <Database className="w-3.5 h-3.5 text-amber-300" />
+                <span className="font-semibold text-amber-200">Yerel Hafıza Modu Aktif</span>
+                <span className="text-white/70 hidden sm:inline">
+                  (Ortak Firebase veritabanını bağlamak için <code>src/firebase.js</code> dosyasına config ekleyebilirsiniz)
+                </span>
+              </>
+            )}
+          </div>
+          <span className="text-[11px] font-mono text-white/75 bg-white/10 px-2 py-0.5 rounded-md">
+            {cocktails.length} Aktif Tarif
+          </span>
+        </div>
+
         {/* Vibrant Hero Banner */}
         <section className="relative rounded-3xl bg-gradient-to-r from-stone-950 via-stone-900 to-stone-950 text-white p-6 sm:p-10 shadow-2xl border border-white/10 overflow-hidden">
-          {/* Ambient Glows */}
           <div className="absolute -right-24 -top-24 w-96 h-96 rounded-full bg-[#FF5500]/30 blur-3xl pointer-events-none" />
           <div className="absolute -left-24 -bottom-24 w-96 h-96 rounded-full bg-amber-500/20 blur-3xl pointer-events-none" />
 
@@ -197,16 +201,16 @@ export default function App() {
             <div className="max-w-2xl space-y-3">
               <div className="inline-flex items-center space-x-2 bg-white/10 backdrop-blur-md px-3.5 py-1 rounded-full text-amber-300 text-xs font-bold border border-white/15">
                 <Sparkles className="w-3.5 h-3.5" />
-                <span>{categories.length} Alkol Çeşidi • Tam Ölçüler • Barmen Püf Noktaları</span>
+                <span>{categories.length} Alkol Çeşidi • Tam Ölçüler • Canlı Veritabanı</span>
               </div>
               <h2 className="text-3xl sm:text-5xl font-black tracking-tight leading-tight">
                 Mükemmel Kokteyli <br className="hidden sm:inline" />
                 <span className="text-[#FF7700] underline decoration-amber-400 decoration-wavy decoration-2">
-                  Kendi Evinde
-                </span> Yarat.
+                  Toplulukla Birlikte
+                </span> Keşfet.
               </h2>
               <p className="text-stone-300 text-sm sm:text-base leading-relaxed max-w-xl">
-                Alkol kategorilerinizi genişletin, yeni alkol çeşitleri tanımlayın ve her alkolün altına kendi özel tariflerinizi fotoğraflarıyla kaydedin.
+                Herkesin eklediği özel kokteyl tariflerini anlık olarak görüntüleyin, kendi tarifinizi yükleyin ve zengin miksoloji kitaplığına katkıda bulunun.
               </p>
             </div>
 
@@ -234,7 +238,7 @@ export default function App() {
           </div>
         </section>
 
-        {/* ALCOHOL CATEGORIES SECTION: RESPONSIVE WRAP & ADD CATEGORY */}
+        {/* ALCOHOL CATEGORIES SECTION */}
         <section className="space-y-3 bg-black/15 p-4 sm:p-5 rounded-3xl border border-white/20 backdrop-blur-md">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 px-1">
             <div>
@@ -250,7 +254,6 @@ export default function App() {
               </p>
             </div>
 
-            {/* Quick Add Recipe to Current Category Shortcut */}
             {activeCategoryObj && (
               <button
                 onClick={() => {
@@ -265,7 +268,6 @@ export default function App() {
             )}
           </div>
 
-          {/* Category Filter Chips with Flex-Wrap (Never overflows) */}
           <CategoryFilter
             categories={categories}
             activeCategory={activeCategory}
@@ -299,7 +301,6 @@ export default function App() {
               )}
             </div>
 
-            {/* Direct Add Recipe Under this Alcohol Category Button */}
             <button
               onClick={() => {
                 setCocktailToEdit(null);
@@ -331,7 +332,6 @@ export default function App() {
               ))}
             </div>
           ) : (
-            /* Empty State */
             <div className="bg-white/90 backdrop-blur-md rounded-3xl p-10 text-center space-y-4 shadow-lg border border-white/60 max-w-lg mx-auto my-12">
               <div className="w-16 h-16 rounded-full bg-orange-100 text-[#FF5500] flex items-center justify-center mx-auto text-2xl">
                 {activeCategoryObj ? activeCategoryObj.emoji : '🔍'}
